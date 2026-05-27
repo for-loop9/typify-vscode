@@ -1,0 +1,19 @@
+# Node
+node_modules/
+
+# Managed Python venv (created at runtime by the extension)
+.typify-venv/
+
+# Typify analysis output (generated per project)
+.typify/
+
+# VS Code extension packaging
+*.vsix
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

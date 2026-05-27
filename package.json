@@ -1,0 +1,58 @@
+{
+  "name": "typify",
+  "displayName": "Typify",
+  "description": "Python type inference with hover info, completions, and deep-learning support",
+  "version": "0.2.0",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages", "Linters"],
+  "activationEvents": ["onLanguage:python"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "typify.showSidebar",
+        "title": "Typify: Show Panel"
+      },
+      {
+        "command": "typify.reanalyze",
+        "title": "Typify: Re-analyze Project"
+      },
+      {
+        "command": "typify.annotate",
+        "title": "Annotate Symbol",
+        "category": "Typify",
+        "icon": "$(edit)"
+      }
+    ],
+    "menus": {
+      "editor/hover/title": [
+        {
+          "command": "typify.annotate",
+          "when": "editorLangId == python",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "typify-container",
+          "title": "Typify",
+          "icon": "$(symbol-parameter)"
+        }
+      ]
+    },
+    "views": {
+      "typify-container": [
+        {
+          "type": "webview",
+          "id": "typify.sidebar",
+          "name": "Typify"
+        }
+      ]
+    }
+  },
+  "notes": {
+    "venv": "The extension creates a .typify-venv/ directory inside extensionPath at first activation. Add .typify-venv to .vscodeignore so it is not bundled when packaging with vsce."
+  }
+}
