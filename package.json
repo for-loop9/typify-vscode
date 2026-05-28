@@ -1,12 +1,15 @@
 {
   "name": "typify",
   "displayName": "Typify",
+  "publisher": "amanh",
   "description": "Python type inference with hover info, completions, and deep-learning support",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages", "Linters"],
   "activationEvents": ["onLanguage:python"],
   "main": "./extension.js",
+  "icon": "media/icon.png",
+  "repository": {"url": "https://github.com/for-loop9/typify-vscode"},
   "contributes": {
     "commands": [
       {
@@ -38,13 +41,14 @@
         {
           "id": "typify-container",
           "title": "Typify",
-          "icon": "$(symbol-parameter)"
+          "icon": "media/icon-dark.svg"
         }
       ]
     },
     "views": {
       "typify-container": [
         {
+          "icon": "media/icon-dark.svg",
           "type": "webview",
           "id": "typify.sidebar",
           "name": "Typify"
