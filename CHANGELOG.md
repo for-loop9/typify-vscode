@@ -1,9 +1,8 @@
-# Change Log
+# Changelog
 
-All notable changes to the "typify" extension will be documented in this file.
+## [0.1.1] - 2026-05-28
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+### Fixed
 
-## [Unreleased]
-
-- Initial release
+* Updated the extension icon.
+* Improved and corrected the extension description in VS Code Marketplace.

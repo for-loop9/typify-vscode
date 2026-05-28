@@ -2,8 +2,8 @@
   "name": "typify",
   "displayName": "Typify",
   "publisher": "amanh",
-  "description": "Python type inference with hover info, completions, and deep-learning support",
-  "version": "0.1.0",
+  "description": "Interactive type inference tool powered by Typify engine.",
+  "version": "0.1.1",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages", "Linters"],
   "activationEvents": ["onLanguage:python"],
@@ -55,8 +55,5 @@
         }
       ]
     }
-  },
-  "notes": {
-    "venv": "The extension creates a .typify-venv/ directory inside extensionPath at first activation. Add .typify-venv to .vscodeignore so it is not bundled when packaging with vsce."
   }
 }
