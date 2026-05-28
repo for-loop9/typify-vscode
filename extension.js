@@ -1,11 +1,68 @@
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { runAnalyzer } = require('./analyzer');
 const { getStatus, onStateChange } = require('./state');
 const { TypeHoverProvider, getLastHovered } = require('./hoverProvider');
 const { TypeCompletionProvider } = require('./completionProvider');
 const { SidebarProvider, VIEW_TYPE } = require('./sidebarProvider');
 const { annotate } = require('./annotator');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mirror helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a fresh temp directory to use as the mirror for this session.
+ * Returns the absolute path to the mirror root.
+ */
+function createMirrorDir() {
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'typify-mirror-'));
+}
+
+/**
+ * Copy every .py file from `projectPath` into `mirrorPath`, preserving the
+ * relative directory structure.  Existing mirror files are overwritten.
+ */
+function seedMirror(projectPath, mirrorPath) {
+    const walk = (dir) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const abs = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                // Skip hidden dirs (e.g. .git, .typify)
+                if (!entry.name.startsWith('.')) walk(abs);
+            } else if (entry.isFile() && entry.name.endsWith('.py')) {
+                const rel  = path.relative(projectPath, abs);
+                const dest = path.join(mirrorPath, rel);
+                fs.mkdirSync(path.dirname(dest), { recursive: true });
+                fs.copyFileSync(abs, dest);
+            }
+        }
+    };
+    walk(projectPath);
+}
+
+/**
+ * Write `text` to the mirror copy of `fsPath`.
+ * Creates parent directories as needed.
+ */
+function flushToMirror(projectPath, mirrorPath, fsPath, text) {
+    const rel  = path.relative(projectPath, fsPath);
+    const dest = path.join(mirrorPath, rel);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, text, 'utf8');
+}
+
+/**
+ * Remove a file from the mirror (e.g. when deleted from the workspace).
+ * Silently ignores missing files.
+ */
+function removeFromMirror(projectPath, mirrorPath, fsPath) {
+    const rel  = path.relative(projectPath, fsPath);
+    const dest = path.join(mirrorPath, rel);
+    try { fs.unlinkSync(dest); } catch (_) { /* already gone */ }
+}
 
 // ─────────────────────────────────────────────
 // Status-bar item
@@ -46,6 +103,20 @@ function activate(context) {
     }
     const projectPath = workspaceFolder.uri.fsPath;
 
+    // ── Mirror setup ────────────────────────────
+    // One temp dir per session; seeded with all .py files from the workspace.
+    // All subsequent analysis runs against this mirror so unsaved edits are
+    // picked up without requiring a file save.
+    const mirrorPath = createMirrorDir();
+    seedMirror(projectPath, mirrorPath);
+
+    // Clean up the mirror when the extension is deactivated.
+    context.subscriptions.push({
+        dispose() {
+            try { fs.rmSync(mirrorPath, { recursive: true, force: true }); } catch (_) {}
+        }
+    });
+
     // ── Status bar ──────────────────────────────
     const statusBar = createStatusBarItem();
     context.subscriptions.push(statusBar);
@@ -60,12 +131,12 @@ function activate(context) {
         })
     );
 
-    // ── File watcher & debounced re-analysis ────
+    // ── Debounced re-analysis ───────────────────
     let timeout;
     function debouncedRun() {
         clearTimeout(timeout);
         timeout = setTimeout(() => {
-            runAnalyzer(context, projectPath).catch(err => {
+            runAnalyzer(context, projectPath, mirrorPath).catch(err => {
                 console.error('Typify analyzer error:', err);
             });
         }, 1000);
@@ -74,10 +145,48 @@ function activate(context) {
     // Give the sidebar a callback so saving config triggers re-analysis
     sidebarProvider.setReanalyzeCallback(() => debouncedRun());
 
+    // ── In-memory change listener ───────────────
+    // Fires on every keystroke (no save required).  We flush the current
+    // document text to the mirror and kick a debounced analysis run.
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument(event => {
+            const doc = event.document;
+            if (doc.languageId !== 'python') return;
+            if (!doc.uri.fsPath.startsWith(projectPath)) return;
+
+            flushToMirror(projectPath, mirrorPath, doc.uri.fsPath, doc.getText());
+            debouncedRun();
+        })
+    );
+
+    // ── File-system watcher ─────────────────────
+    // Handles on-disk events: new files created outside the editor, and
+    // deletions.  Saves are already handled by onDidChangeTextDocument above,
+    // but onDidChange here acts as a fallback for external editors.
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.py');
-    watcher.onDidChange(() => debouncedRun());
-    watcher.onDidCreate(() => debouncedRun());
-    watcher.onDidDelete(() => debouncedRun());
+    watcher.onDidChange(uri => {
+        // Only sync if the document isn't open (open docs are covered above)
+        const isOpen = vscode.workspace.textDocuments
+            .some(d => d.uri.fsPath === uri.fsPath);
+        if (!isOpen) {
+            try {
+                flushToMirror(projectPath, mirrorPath, uri.fsPath,
+                    fs.readFileSync(uri.fsPath, 'utf8'));
+            } catch (_) {}
+        }
+        debouncedRun();
+    });
+    watcher.onDidCreate(uri => {
+        try {
+            flushToMirror(projectPath, mirrorPath, uri.fsPath,
+                fs.readFileSync(uri.fsPath, 'utf8'));
+        } catch (_) {}
+        debouncedRun();
+    });
+    watcher.onDidDelete(uri => {
+        removeFromMirror(projectPath, mirrorPath, uri.fsPath);
+        debouncedRun();
+    });
     context.subscriptions.push(watcher);
 
     // ── Hover provider ──────────────────────────
@@ -106,7 +215,7 @@ function activate(context) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('typify.reanalyze', () => {
-            runAnalyzer(context, projectPath).catch(err => {
+            runAnalyzer(context, projectPath, mirrorPath).catch(err => {
                 vscode.window.showErrorMessage(`Typify: ${err.message}`);
             });
         })
@@ -139,7 +248,7 @@ function activate(context) {
     );
 
     // ── Initial run ─────────────────────────────
-    runAnalyzer(context, projectPath).catch(err => {
+    runAnalyzer(context, projectPath, mirrorPath).catch(err => {
         console.error('Typify initial analysis failed:', err);
     });
 }

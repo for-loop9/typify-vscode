@@ -120,19 +120,26 @@ function ensureVenv(context) {
 // Main entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
-function runAnalyzer(context, projectPath) {
+/**
+ * @param {object} context  - VS Code extension context
+ * @param {string} projectPath - real workspace root (used for relative-path keys)
+ * @param {string} [mirrorPath] - temp mirror to analyse instead of projectPath;
+ *                                when omitted the real workspace is used directly
+ */
+function runAnalyzer(context, projectPath, mirrorPath) {
 
     setStatus('running', 'Analyzing project…');
 
-    const outputDir  = path.join(projectPath, '.typify');
-    const indexPath  = path.join(outputDir, 'index.json');
+    const analysisRoot = mirrorPath ?? projectPath;
+    const outputDir    = path.join(analysisRoot, '.typify');
+    const indexPath    = path.join(outputDir, 'index.json');
 
     return ensureVenv(context)
         .then(() => new Promise((resolve, reject) => {
 
             setStatus('running', 'Analyzing project…');
 
-            const proc = spawn(venvTypify(context), ["infer", projectPath, outputDir]);
+            const proc = spawn(venvTypify(context), ["infer", analysisRoot, outputDir]);
 
             proc.stdout.on('data', data => console.log('[typify]', data.toString()));
             proc.stderr.on('data', data => console.error('[typify]', data.toString()));
