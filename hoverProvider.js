@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const { getAnalysisCache, getIndex } = require('./state');
 
-// The most recently hovered entry — read by the typify.annotate command.
+// The most recently hovered entry - read by the typify.annotate command.
 let _lastHoveredEntry = null;
 let _lastHoveredDocument = null;
 
@@ -10,22 +10,6 @@ function getLastHovered() {
     return { entry: _lastHoveredEntry, document: _lastHoveredDocument };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Type resolution
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Pick the best single type string from a type object:
- *   { usage: string, retrieved: { type: { score, hits } }, type4py: { type: { score } } }
- *
- * Priority:
- *  1. Non-empty, non-"Any" usage — ground truth from symbolic execution.
- *  2. Retrieved top candidate (scored by score × √hits) if above 0.3.
- *  3. Type4Py top candidate if score above 0.4.
- *  4. Any retrieved candidate (weak).
- *  5. Any type4py candidate (weak).
- *  6. Usage even if "Any" or empty.
- */
 function bestType(typeObj) {
     if (!typeObj || typeof typeObj !== 'object') return 'Any';
 
@@ -56,10 +40,6 @@ function bestType(typeObj) {
     return 'Any';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Lookup
-// ─────────────────────────────────────────────────────────────────────────────
-
 function getFileData(document, workspacePath) {
     if (!getIndex()) return null;
     const relPath = path.relative(workspacePath, document.uri.fsPath).replace(/\\/g, '/');
@@ -70,7 +50,7 @@ function findEntry(fileData, position, wordRange) {
     if (!fileData) return null;
 
     const line     = position.line + 1;
-    const colStart = wordRange ? wordRange.start.character : position.character;
+    const colStart = position.character;  // use exact cursor position, not word range start
 
     const candidates = [];
     for (const [key, entry] of Object.entries(fileData)) {
@@ -85,14 +65,6 @@ function findEntry(fileData, position, wordRange) {
     return best.entry;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Signature formatting
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Main signature — Pylance multiline style.
- * params is { name: typeObj } — each resolved via bestType().
- */
 function formatFunctionSignature(name, params, returnTypeObj, kind = 'def') {
     const ret     = bestType(returnTypeObj) || 'None';
     const entries = Object.entries(params);
@@ -111,9 +83,6 @@ function formatFunctionSignature(name, params, returnTypeObj, kind = 'def') {
     return `${kind} ${name}(\n${paramLines}\n) -> ${ret}`;
 }
 
-/**
- * Call-site signature — your original tab-indented style, params through bestType().
- */
 function formatFunctionSignatureForCallSites(name, params, returnTypeObj) {
     const ret     = bestType(returnTypeObj) || '?';
     const entries = Object.entries(params);
@@ -132,16 +101,18 @@ function formatFunctionSignatureForCallSites(name, params, returnTypeObj) {
     return `\t${name}(\n${paramLines}\n\t) -> ${ret}`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Hover content builder
-// ─────────────────────────────────────────────────────────────────────────────
-
 function buildHoverContent(entry) {
     const code = new vscode.MarkdownString();
     code.isTrusted    = true;
     code.supportHtml  = true;
 
-    // ── Main signature ──────────────────────────────────────────────────────
+    // ── Header ──────────────────────────────────────────────────────────────
+    code.appendMarkdown(
+        '<span style="' +
+            'font-size:10px;font-weight:700;letter-spacing:.8px;' +
+            'text-transform:uppercase;opacity:.55;' +
+        '">Typify</span>\n\n---\n\n'
+    );
     if (entry.node_type === 'Function') {
         code.appendCodeblock(
             formatFunctionSignature(entry.identifier, entry.params ?? {}, entry.type),
@@ -183,43 +154,38 @@ function buildHoverContent(entry) {
         code.appendMarkdown(`<a href="${annotateCmd}" style="${btnStyle}">✎ Annotate</a>`);
     }
 
-    // ── Scope ───────────────────────────────────────────────────────────────
     if (entry.scope) {
         code.appendMarkdown(`\n\n*Scope:* \`${entry.scope || '(module)'}\``);
     }
 
-    // ── Goto ────────────────────────────────────────────────────────────────
     if (entry.goto) {
         code.appendMarkdown(`\n\n*Defined at:* \`${entry.goto}\``);
     }
 
-    // ── Call-sites ──────────────────────────────────────────────────────────
     if (entry.node_type === 'Function' && entry.callsites) {
         const sites = Object.entries(entry.callsites);
         if (sites.length > 0) {
             code.appendMarkdown(`\n\n*Called from ${sites.length} location(s):*`);
-            for (const [site, info] of sites.slice(0, 3)) {
-                code.appendMarkdown(`\n\n*at* \`${site}\``);
+            for (const [site, info] of sites) {
+                // site format: "relative/path.py:line:col" — show only filename:line
+                const parts = site.split(':');
+                const lineNum = parts.length >= 2 ? parts[parts.length - 1] : null;
+                const filePath = parts.slice(0, parts.length - (lineNum ? 1 : 0)).join(':');
+                const fileName = path.basename(filePath);
+                const display = lineNum ? `${fileName}:${lineNum}` : fileName;
+                code.appendMarkdown(`\n\n*at* \`${display}\``);
                 code.appendCodeblock(
                     formatFunctionSignatureForCallSites(entry.identifier, info?.params ?? {}, info?.type),
                     'python'
                 );
             }
-            if (sites.length > 3) {
-                code.appendMarkdown(`\n*…and ${sites.length - 3} more call-site(s)*`);
-            }
         }
     }
 
-    // ── Footer ──────────────────────────────────────────────────────────────
-    code.appendMarkdown('\n\n---\n<sub>Typify analysis</sub>');
+    code.appendMarkdown('\n\n---');
 
     return new vscode.Hover(code);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Provider
-// ─────────────────────────────────────────────────────────────────────────────
 
 class TypeHoverProvider {
     constructor(workspacePath) {

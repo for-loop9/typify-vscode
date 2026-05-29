@@ -4,6 +4,9 @@ let cachedIndex = null;
 let status = 'idle';
 let statusMessage = '';
 
+// Whether analysis is paused by the user
+let paused = false;
+
 // { [relPath]: analysisData }
 let analysisCache = {};
 
@@ -53,6 +56,15 @@ function getStatus() {
     return { status, statusMessage };
 }
 
+function setPaused(value) {
+    paused = !!value;
+    _notify();
+}
+
+function getPaused() {
+    return paused;
+}
+
 module.exports = {
     setIndex,
     getIndex,
@@ -62,5 +74,7 @@ module.exports = {
     clearAnalysisCache,
     setStatus,
     getStatus,
+    setPaused,
+    getPaused,
     onStateChange,
 };

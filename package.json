@@ -2,7 +2,7 @@
   "name": "typify",
   "displayName": "Typify",
   "publisher": "amanh",
-  "description": "Interactive type inference tool powered by Typify engine.",
+  "description": "Interactive type inference tool powered by the Typify engine.",
   "version": "0.1.1",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages", "Linters"],

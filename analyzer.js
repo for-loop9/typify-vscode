@@ -33,7 +33,7 @@ function venvPython(context) {
 }
 
 function venvTypify(context) {
-    return path.join(venvBin(context), process.platform === 'win32' ? 'typify-prototype.exe' : 'typify-prototype');
+    return path.join(venvBin(context), process.platform === 'win32' ? 'typify-backend.exe' : 'typify-backend');
 }
 
 /**
@@ -56,7 +56,7 @@ function findSystemPython() {
 }
 
 /**
- * Ensure the venv exists and has typify-prototype installed.
+ * Ensure the venv exists and has typify-backend installed.
  * Resolves when the environment is ready; rejects with a descriptive error
  * if Python can't be found or pip fails.
  *
@@ -91,12 +91,12 @@ function ensureVenv(context) {
                 return reject(new Error(`Failed to create venv (exit ${code}). Is the venv module available?`));
             }
 
-            setStatus('running', 'Installing typify-prototype…');
+            setStatus('running', 'Installing typify-backend…');
 
-            // Step 2 — pip install typify-prototype into the venv
+            // Step 2 — pip install typify-backend into the venv
             const pip = spawn(venvPython(context), [
                 '-m', 'pip', 'install', '--quiet', '--disable-pip-version-check',
-                'typify-prototype',
+                'typify-backend',
             ]);
 
             pip.stderr.on('data', d => console.error('[typify pip]', d.toString()));
@@ -104,7 +104,7 @@ function ensureVenv(context) {
 
             pip.on('close', pipCode => {
                 if (pipCode !== 0) {
-                    return reject(new Error(`pip install typify-prototype failed (exit ${pipCode}).`));
+                    return reject(new Error(`pip install typify-backend failed (exit ${pipCode}).`));
                 }
                 resolve();
             });
@@ -145,14 +145,14 @@ function runAnalyzer(context, projectPath, mirrorPath) {
             proc.stderr.on('data', data => console.error('[typify]', data.toString()));
 
             proc.on('error', err => {
-                setStatus('error', `Failed to launch typify-prototype: ${err.message}`);
+                setStatus('error', `Failed to launch typify-backend: ${err.message}`);
                 reject(err);
             });
 
             proc.on('close', code => {
 
                 if (code !== 0) {
-                    const msg = `typify-prototype exited with code ${code}`;
+                    const msg = `typify-backend exited with code ${code}`;
                     setStatus('error', msg);
                     return reject(new Error(msg));
                 }

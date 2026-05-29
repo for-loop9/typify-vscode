@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { runAnalyzer } = require('./analyzer');
-const { getStatus, onStateChange } = require('./state');
+const { getStatus, onStateChange, getPaused } = require('./state');
 const { TypeHoverProvider, getLastHovered } = require('./hoverProvider');
 const { TypeCompletionProvider } = require('./completionProvider');
 const { SidebarProvider, VIEW_TYPE } = require('./sidebarProvider');
@@ -24,6 +24,7 @@ function createMirrorDir() {
 /**
  * Copy every .py file from `projectPath` into `mirrorPath`, preserving the
  * relative directory structure.  Existing mirror files are overwritten.
+ * config.json is intentionally not copied — it is created and owned by typify.
  */
 function seedMirror(projectPath, mirrorPath) {
     const walk = (dir) => {
@@ -124,7 +125,7 @@ function activate(context) {
     updateStatusBar(statusBar);
 
     // ── Sidebar ─────────────────────────────────
-    const sidebarProvider = new SidebarProvider(context, projectPath);
+    const sidebarProvider = new SidebarProvider(context, projectPath, mirrorPath);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(VIEW_TYPE, sidebarProvider, {
             webviewOptions: { retainContextWhenHidden: true },
@@ -134,8 +135,10 @@ function activate(context) {
     // ── Debounced re-analysis ───────────────────
     let timeout;
     function debouncedRun() {
+        if (getPaused()) return;
         clearTimeout(timeout);
         timeout = setTimeout(() => {
+            if (getPaused()) return;
             runAnalyzer(context, projectPath, mirrorPath).catch(err => {
                 console.error('Typify analyzer error:', err);
             });

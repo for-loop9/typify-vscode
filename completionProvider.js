@@ -41,10 +41,16 @@ function itemsFromFileData(fileData) {
         }
 
         const docs = new vscode.MarkdownString();
+        // docs.appendMarkdown('**TYPIFY**\n\n---\n\n');
+        docs.appendMarkdown(
+        '<span style="' +
+            'font-size:10px;font-weight:700;letter-spacing:.8px;' +
+            'text-transform:uppercase;opacity:.55;' +
+        '">Typify</span>\n\n---\n\n'
+    );
         docs.appendCodeblock(item.detail, 'python');
         if (entry.scope) docs.appendMarkdown(`\n*Scope:* \`${entry.scope}\``);
         if (entry.goto)  docs.appendMarkdown(`\n\n*Defined at:* \`${entry.goto}\``);
-        docs.appendMarkdown('\n\n---\n<sub>Typify</sub>');
         item.documentation = docs;
 
         item.sortText = entry.node_type === 'Function' ? `0_${entry.identifier}`

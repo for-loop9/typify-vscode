@@ -1,24 +1,16 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { getStatus, onStateChange } = require('./state');
+const { getStatus, onStateChange, getPaused, setPaused } = require('./state');
 
 const VIEW_TYPE = 'typify.sidebar';
 
-const CONFIG_DEFAULTS = {
-    'context-retrieval':       true,
-    'context-index-download':  'https://drive.google.com/file/d/1rzxFqKOo-A4mlctp6bzekky_80EIS-Xa/view?usp=sharing',
-    'retrieval-top-k':         5,
-    'type4py':                 true,
-    'type4py-api-url':         'https://type4py.ali-aman.ca/api/predict?tc=0',
-    'augment-context':         false,
-};
-
 class SidebarProvider {
-    /** @param {vscode.ExtensionContext} context @param {string} projectPath */
-    constructor(context, projectPath) {
+    /** @param {vscode.ExtensionContext} context @param {string} projectPath @param {string} mirrorPath */
+    constructor(context, projectPath, mirrorPath) {
         this._context = context;
         this._projectPath = projectPath;
+        this._mirrorPath = mirrorPath;
         this._view = null;
         this._onReanalyze = null; // set by extension.js
 
@@ -48,6 +40,16 @@ class SidebarProvider {
                     }
                     break;
                 }
+
+                case 'togglePause': {
+                    setPaused(msg.paused);
+                    // If resuming, trigger a fresh analysis run
+                    if (!msg.paused && this._onReanalyze) {
+                        this._onReanalyze();
+                    }
+                    this._push();
+                    break;
+                }
             }
         });
 
@@ -56,27 +58,27 @@ class SidebarProvider {
 
     // ── Config helpers ──────────────────────────────────────────────────────
 
+    /**
+     * The config.json is created and owned by typify — we never create it.
+     * We only read it (to populate the sidebar) and patch it (on save).
+     */
     _configPath() {
-        return path.join(this._projectPath, '.typify', 'config.json');
+        return path.join(this._mirrorPath, '.typify', 'config.json');
     }
 
     _readConfig() {
         const p = this._configPath();
-        if (fs.existsSync(p)) {
-            try { return { ...CONFIG_DEFAULTS, ...JSON.parse(fs.readFileSync(p, 'utf8')) }; }
-            catch (_) {}
-        }
-        return { ...CONFIG_DEFAULTS };
+        if (!fs.existsSync(p)) return null; // not yet created by typify
+        try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
+        catch (_) { return null; }
     }
 
     _writeConfig(patch) {
         try {
             const p = this._configPath();
-            const dir = path.dirname(p);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            const current = this._readConfig();
-            const next = { ...current, ...patch };
-            fs.writeFileSync(p, JSON.stringify(next, null, '\t'), 'utf8');
+            if (!fs.existsSync(p)) return false; // typify hasn't run yet
+            const current = JSON.parse(fs.readFileSync(p, 'utf8'));
+            fs.writeFileSync(p, JSON.stringify({ ...current, ...patch }, null, '\t'), 'utf8');
             return true;
         } catch (err) {
             vscode.window.showErrorMessage(`Typify: Could not save config — ${err.message}`);
@@ -90,7 +92,8 @@ class SidebarProvider {
         if (!this._view) return;
         const { status, statusMessage } = getStatus();
         const config = this._readConfig();
-        this._view.webview.postMessage({ type: 'stateUpdate', status, statusMessage, config });
+        const paused = getPaused();
+        this._view.webview.postMessage({ type: 'stateUpdate', status, statusMessage, config, paused });
     }
 
     // ── Webview HTML ────────────────────────────────────────────────────────
@@ -185,6 +188,18 @@ class SidebarProvider {
   .save-btn:hover { opacity:.85; }
   .save-btn:disabled { opacity:.45; cursor:default; }
 
+  /* Inline pause button (inside status card) */
+  .pause-btn {
+    display:flex; align-items:center; gap:4px;
+    padding:2px 8px; border-radius:3px; font-size:10px; font-weight:600;
+    border:1px solid var(--border); cursor:pointer;
+    background:transparent; color:var(--fg-dim);
+    transition:background .15s, color .15s, border-color .15s;
+    white-space:nowrap; flex-shrink:0; line-height:1.6;
+  }
+  .pause-btn:hover { background:var(--input-bg); color:var(--fg); }
+  .pause-btn.paused { color:var(--warn); border-color:color-mix(in srgb,var(--warn) 40%,transparent); }
+
   /* Badge */
   .badge { display:inline-flex; align-items:center; padding:1px 6px; border-radius:20px; font-size:10px; font-weight:600; text-transform:uppercase; margin-left:5px; }
   .badge.exp { background:color-mix(in srgb,var(--warn) 18%,transparent); color:var(--warn); border:1px solid color-mix(in srgb,var(--warn) 35%,transparent); }
@@ -207,7 +222,10 @@ class SidebarProvider {
 
 <!-- Status -->
 <div class="card">
-  <div class="card-label">Analyzer status</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <div class="card-label" style="margin:0">Analyzer status</div>
+    <button class="pause-btn" id="pauseBtn" title="Pause or resume live analysis">⏸ Pause</button>
+  </div>
   <div class="status-row">
     <div class="status-dot idle" id="dot"></div>
     <div class="status-text" id="statusText">Idle</div>
@@ -216,7 +234,7 @@ class SidebarProvider {
 </div>
 
 <!-- Config -->
-<div class="card">
+<div class="card" id="configCard" style="display:none">
   <div class="card-label">Configuration</div>
 
   <!-- Context Retrieval toggle -->
@@ -236,14 +254,6 @@ class SidebarProvider {
     </div>
     <label class="switch"><input type="checkbox" id="cfgAugment"><div class="track"></div></label>
   </div>
-
-  <!-- Top-K (shown only when retrieval is on) -->
-  <div class="field-row" id="topKRow">
-    <div class="field-label">Retrieval top-K candidates</div>
-    <input id="cfgTopK" type="number" min="1" max="20" class="field-input" value="5">
-  </div>
-
-  <div class="divider"></div>
 
   <!-- Type4Py toggle -->
   <div class="toggle-row">
@@ -276,20 +286,38 @@ class SidebarProvider {
   const statusText   = document.getElementById('statusText');
   const statusDetail = document.getElementById('statusDetail');
   const cfgRetrieval = document.getElementById('cfgRetrieval');
-  const cfgTopK      = document.getElementById('cfgTopK');
   const cfgType4py   = document.getElementById('cfgType4py');
   const cfgApiUrl    = document.getElementById('cfgApiUrl');
   const cfgAugment   = document.getElementById('cfgAugment');
-  const topKRow      = document.getElementById('topKRow');
   const apiUrlRow    = document.getElementById('apiUrlRow');
   const saveBtn      = document.getElementById('saveBtn');
+  const pauseBtn     = document.getElementById('pauseBtn');
 
   const STATUS_LABELS = { idle:'Idle', running:'Analyzing…', ready:'Ready', error:'Error' };
 
   // Track whether the user has made changes
   let _dirty = false;
-  let _initialConfig = null;
+  let _paused = false;
 
+  // ── Pause toggle ────────────────────────────────────────────────────────────
+  function applyPaused(paused) {
+    _paused = paused;
+    if (paused) {
+      pauseBtn.textContent = '▶ Resume';
+      pauseBtn.classList.add('paused');
+    } else {
+      pauseBtn.textContent = '⏸ Pause';
+      pauseBtn.classList.remove('paused');
+    }
+  }
+
+  pauseBtn.addEventListener('click', () => {
+    const next = !_paused;
+    applyPaused(next);
+    vscode.postMessage({ type: 'togglePause', paused: next });
+  });
+
+  // ── Config ──────────────────────────────────────────────────────────────────
   function markDirty() {
     _dirty = true;
     saveBtn.disabled = false;
@@ -297,13 +325,11 @@ class SidebarProvider {
   }
 
   function updateVisibility() {
-    topKRow.style.display   = cfgRetrieval.checked ? '' : 'none';
-    apiUrlRow.style.display = cfgType4py.checked   ? '' : 'none';
+    apiUrlRow.style.display = cfgType4py.checked ? '' : 'none';
   }
 
   function applyConfig(config) {
     cfgRetrieval.checked = !!config['context-retrieval'];
-    cfgTopK.value        = config['retrieval-top-k'] ?? 5;
     cfgType4py.checked   = !!config['type4py'];
     cfgApiUrl.value      = config['type4py-api-url'] ?? '';
     cfgAugment.checked   = !!config['augment-context'];
@@ -312,16 +338,15 @@ class SidebarProvider {
 
   function readConfig() {
     return {
-      'context-retrieval':       cfgRetrieval.checked,
-      'retrieval-top-k':         parseInt(cfgTopK.value, 10) || 5,
-      'type4py':                 cfgType4py.checked,
-      'type4py-api-url':         cfgApiUrl.value.trim(),
-      'augment-context':         cfgAugment.checked,
+      'context-retrieval':  cfgRetrieval.checked,
+      'type4py':            cfgType4py.checked,
+      'type4py-api-url':    cfgApiUrl.value.trim(),
+      'augment-context':    cfgAugment.checked,
     };
   }
 
   // Wire up change listeners
-  [cfgRetrieval, cfgTopK, cfgType4py, cfgApiUrl, cfgAugment].forEach(el => {
+  [cfgRetrieval, cfgType4py, cfgApiUrl, cfgAugment].forEach(el => {
     el.addEventListener('change', markDirty);
     el.addEventListener('input',  markDirty);
   });
@@ -336,13 +361,20 @@ class SidebarProvider {
     const msg = event.data;
     if (msg.type !== 'stateUpdate') return;
 
+    // Paused state
+    if (typeof msg.paused === 'boolean') applyPaused(msg.paused);
+
     // Status
-    dot.className = 'status-dot ' + msg.status;
-    statusText.textContent  = STATUS_LABELS[msg.status] ?? msg.status;
+    dot.className = 'status-dot ' + (msg.paused ? 'idle' : msg.status);
+    statusText.textContent   = msg.paused ? 'Paused' : (STATUS_LABELS[msg.status] ?? msg.status);
     statusDetail.textContent = msg.statusMessage ?? '';
 
+    // Config card — only visible once analysis is complete
+    const isReady = msg.status === 'ready';
+    document.getElementById('configCard').style.display = isReady ? '' : 'none';
+
     // Config — only update if user hasn't made unsaved changes
-    if (!_dirty && msg.config) {
+    if (isReady && !_dirty && msg.config) {
       applyConfig(msg.config);
     }
   });
