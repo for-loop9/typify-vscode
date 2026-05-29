@@ -375,6 +375,7 @@ Researchers interested in reproducing or extending the published evaluation shou
 
 - [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=amanh.typify)
 - [VS Code Extension Repository](https://github.com/for-loop9/typify-vscode)
+- [Typify Backend Repository](https://github.com/ali-aman-burki/typify-backend)
 - [Replication Package](https://github.com/ali-aman-burki/typify)
 - [Type4Py](https://github.com/saltudelft/type4py)
 - [ICPC 2026 Paper](https://doi.org/10.1145/3794763.3794825)
