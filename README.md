@@ -5,7 +5,7 @@
 The project consists of two parts:
 
 - **Typify VS Code Extension** — interactive editor integration with live inferred types, hover cards, and one-click annotation
-- **typify-backend** — the standalone inference engine and CLI powering the extension
+- **typify-cli** — the standalone inference engine and CLI powering the extension
 
 ---
 
@@ -234,14 +234,14 @@ Available from the Command Palette:
 
 ---
 
-# typify-backend
+# typify-cli
 
-`typify-backend` is the standalone inference engine and CLI used by the VS Code extension. It can also be used independently for research, experimentation, batch analysis, and integration into custom tooling.
+`typify-cli` is the standalone inference engine and CLI used by the VS Code extension. It can also be used independently for research, experimentation, batch analysis, and integration into custom tooling.
 
 ## Installation
 
 ```bash
-pip install typify-backend
+pip install typify-cli
 ```
 
 ---
@@ -279,7 +279,7 @@ The analysis pipeline consists of several stages:
 ### Inference
 
 ```bash
-typify-backend infer <project_directory> <output_directory>
+typify-cli infer <project_directory> <output_directory>
 ```
 
 ### Output Structure
@@ -293,7 +293,7 @@ config.json      # Analyzer configuration
 context-index/   # Retrieval index
 ```
 
-<img src="media/screenshots/infer.webp" alt="typify-backend infer">
+<img src="media/screenshots/infer.webp" alt="typify-cli infer">
 
 The generated output is designed to be consumed directly by the Typify VS Code extension.
 
@@ -340,7 +340,7 @@ For more details, refer to the [ICPC 2026 paper](https://doi.org/10.1145/3794763
 Researchers can build their own retrieval indexes using:
 
 ```bash
-typify-backend build <dataset_root> <index_directory> [--workers N]
+typify-cli build <dataset_root> <index_directory> [--workers N]
 ```
 
 Supported datasets include:
@@ -375,7 +375,7 @@ Researchers interested in reproducing or extending the published evaluation shou
 
 - [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=amanh.typify)
 - [VS Code Extension Repository](https://github.com/for-loop9/typify-vscode)
-- [Typify Backend Repository](https://github.com/ali-aman-burki/typify-backend)
+- [Typify Backend Repository](https://github.com/ali-aman-burki/typify-cli)
 - [Replication Package](https://github.com/ali-aman-burki/typify)
 - [Type4Py](https://github.com/saltudelft/type4py)
 - [ICPC 2026 Paper](https://doi.org/10.1145/3794763.3794825)

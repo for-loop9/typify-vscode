@@ -48,21 +48,17 @@ function getFileData(document, workspacePath) {
 
 function findEntry(fileData, position, wordRange) {
     if (!fileData) return null;
-
-    const line     = position.line + 1;
-    const colStart = position.character;  // use exact cursor position, not word range start
-
-    const candidates = [];
+    
+    const line = position.line + 1;
+    const colStart = wordRange.start.character;
+    
     for (const [key, entry] of Object.entries(fileData)) {
         const [entryLine, entryCol] = key.split(':').map(Number);
-        if (entryLine === line) candidates.push({ col: entryCol, entry });
+        if (entryLine === line && colStart === entryCol) {
+            return entry
+        }
     }
-    if (candidates.length === 0) return null;
-
-    candidates.sort((a, b) => Math.abs(a.col - colStart) - Math.abs(b.col - colStart));
-    const best = candidates[0];
-    if (Math.abs(best.col - colStart) > 10) return null;
-    return best.entry;
+    return null
 }
 
 function formatFunctionSignature(name, params, returnTypeObj, kind = 'def') {
