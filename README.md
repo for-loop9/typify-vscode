@@ -71,7 +71,7 @@ Key findings:
 | Tool | No annotations needed | Usage-driven inference | Cross-module / whole-project | Deterministic & reproducible | ML-based predictions |
 |---|:---:|:---:|:---:|:---:|:---:|
 | Pyright | ✕ | ✕ | ✓ | ✓ | ✕ |
-| Pyre Infer | ✕ | ✕ | ✕ | ✓ | ✕ |
+| Pyre | ✕ | ✕ | ✕ | ✓ | ✕ |
 | Type4Py | ✓ | ✕ | ✕ | ✕ | ✓ |
 | HiTyper | ✓ | ✕ | ✕ | ✕ | ✓ |
 | **Typify** | **✓** | **✓** | **✓** | **✓** | **✓** |
