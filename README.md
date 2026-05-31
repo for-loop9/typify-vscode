@@ -108,6 +108,10 @@ The analysis pipeline consists of several stages:
 
 3. **Propagation passes** - re-applies inferred call-site information across multiple rounds, resolving increasingly deep call chains.
 
+4. **Context-matching retrieval** - queries a search index of annotated Python code for unresolved slots.
+
+5. **Type4Py integration** - uses neural predictions for remaining unresolved cases.
+
 ---
 
 ## Usage
