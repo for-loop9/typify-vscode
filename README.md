@@ -4,8 +4,8 @@
 
 The project consists of two parts:
 
-- **typify-cli** — the standalone inference engine and CLI powering the extension
-- **Typify VS Code Extension** — interactive editor integration with live inferred types, hover cards, and one-click annotation
+- **typify-cli** - the standalone inference engine and CLI powering the extension
+- **Typify VS Code Extension** - interactive editor integration with live inferred types, hover cards, and one-click annotation
 
 ---
 
@@ -78,8 +78,6 @@ Key findings:
 
 As shown above, Typify stands out because it combines analysis of the entire project with predictable execution, while also supporting optional ML features. Unlike many existing tools, it does not focus on just one strength at the expense of others.
 
-The VS Code extension makes this analysis available interactively as you write code.
-
 ---
 
 # typify-cli
@@ -88,37 +86,27 @@ The VS Code extension makes this analysis available interactively as you write c
 
 ## Installation
 
+Requires **Python 3.11 or higher**.
+
 ```bash
 pip install typify-cli
 ```
+
+### Dependencies
+
+The following packages are installed automatically by the above command: `tantivy`, `rich`, `gdown`, and `requests`.
 
 ---
 
 ## How Typify Works
 
-Typify's core contribution is **usage-driven type inference**.
-
-Rather than analyzing functions in isolation, Typify examines how functions are called across the project and propagates observed argument types back into parameter slots.
-
-For example, if `items` is consistently called with `list[str]`, Typify infers:
-
-```python
-items: list[str]
-```
-
-and uses that information to infer additional downstream expressions.
-
 The analysis pipeline consists of several stages:
 
-1. **Dependency graph construction** — builds a project-wide import graph and handles circular imports through fixpoint iteration.
+1. **Dependency graph construction** - builds a project-wide import graph and handles circular imports through fixpoint iteration.
 
-2. **Usage-driven inference** — infers types from assignments, operators, method calls, and usage patterns. Types accumulate monotonically over time.
+2. **Usage-driven inference** - infers types from assignments, operators, method calls, and usage patterns. Types accumulate monotonically over time.
 
-3. **Propagation passes** — re-applies inferred call-site information across multiple rounds, resolving increasingly deep call chains.
-
-4. **Context-matching retrieval** — queries a search index of annotated Python code for unresolved slots.
-
-5. **Type4Py integration** — uses neural predictions for remaining unresolved cases.
+3. **Propagation passes** - re-applies inferred call-site information across multiple rounds, resolving increasingly deep call chains.
 
 ---
 
@@ -201,21 +189,58 @@ This enables experimentation with domain-specific retrieval corpora.
 
 ---
 
-## Replication Package
+## Batch Inference and Evaluation
 
-The full replication package for the ICPC 2026 paper is available at:
+For large-scale analysis across entire datasets, such as benchmarking Typify against a corpus of Python projects, `typify-cli` provides three commands that together form an end-to-end evaluation pipeline: ground-truth extraction, batch inference, and result comparison.
 
-https://github.com/ali-aman-burki/typify
+### `typify gt` - Ground-Truth Extraction
 
-It contains:
+Extracts type annotations from an already-annotated dataset, producing a JSON file that serves as the reference ground truth for evaluation. Run this first on any dataset that contains existing annotations.
 
-- Evaluation scripts
-- Benchmark pipelines
-- Baseline comparisons
-- Dataset processing utilities
-- Result analysis tooling
+```bash
+Usage: typify gt [DATASET_DIR] [--paths-txt PATHS_TXT] [--output-types OUTPUT_TYPES]
 
-Researchers interested in reproducing or extending the published evaluation should use that repository.
+Arguments:
+  DATASET_DIR PATH       Path to the dataset directory
+
+Options:
+  --output-types PATH    Output JSON file to write extracted annotations into
+  --paths-txt PATH       Optional file listing specific relative paths to analyze
+```
+
+---
+
+### `typify dataset` - Batch Inference
+
+Runs Typify's inference engine over an entire dataset directory, processing each project and writing predicted types to a JSON output file. The `--topn` option controls how many ranked predictions to retain per slot, which is useful when evaluating Top-N accuracy.
+
+```bash
+Usage: typify dataset [DATASET_DIR] [OPTIONS]
+
+Arguments:
+  DATASET_DIR PATH       Path to the dataset directory
+
+Options:
+  --output-types PATH    Output JSON file for inferred type predictions
+  --topn INTEGER         Number of top-ranked predictions to retain per slot
+```
+
+---
+
+### `typify eval` - Evaluation
+
+Compares Typify's predictions against the ground truth produced by `typify gt`, reporting accuracy using both exact-match and base-type matching. Supports Top-N evaluation to measure how often the correct type appears anywhere in the top N predictions.
+
+```bash
+Usage: typify eval [GT_PATH] [TOOL_PATH] [--topn N]
+
+Arguments:
+  GT_PATH PATH    Ground-truth JSON file produced by typify gt
+  TOOL_PATH PATH  Inference output JSON file produced by typify dataset
+
+Options:
+  --topn INTEGER  Evaluate using Top-N predictions (default: 1)
+```
 
 ---
 
@@ -226,7 +251,6 @@ The VS Code extension brings Typify directly into your editor. Open a Python pro
 ## Requirements
 
 - VS Code 1.85 or higher
-- Python 3.11 or higher installed and available on your PATH
 
 Typify sets itself up automatically on first launch. No extra installs are required.
 
@@ -376,11 +400,10 @@ Available from the Command Palette:
 - [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=amanh.typify)
 - [VS Code Extension Repository](https://github.com/for-loop9/typify-vscode)
 - [Typify Backend Repository](https://github.com/ali-aman-burki/typify-cli)
-- [Replication Package](https://github.com/ali-aman-burki/typify)
 - [Type4Py](https://github.com/saltudelft/type4py)
 - [ICPC 2026 Paper](https://doi.org/10.1145/3794763.3794825)
 
 ---
 The full technical paper containing the technique description and evaluation results was published at the *34th IEEE/ACM International Conference on Program Comprehension (ICPC 2026)*, Rio de Janeiro, Brazil.
 
-*Typify is a research project from the University of Windsor, supported by NSERC.*
+*Typify is a research project from the University of Windsor, supported by the Natural Sciences and Engineering Research Council of Canada (NSERC).*
